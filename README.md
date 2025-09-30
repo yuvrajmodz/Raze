@@ -14,5 +14,5 @@ a Advanced & Modern React Native app. It comes with:
 ## 𝗣𝗿𝗼𝗷𝗲𝗰𝘁 𝗦𝘁𝗿𝘂𝗰𝘁𝘂𝗿𝗲
 [`.structure`](./.structure)
 
-
+## Rights.
 © 2025 NacDevs. All rights reserved. 
