@@ -1,0 +1,12 @@
+Raze/
+├── assets/
+│   ├── adaptive-icon.png
+│   ├── favicon.png
+│   ├── icon.png
+│   └── splash-icon.png
+├── App.js
+├── app.json
+├── index.js
+├── package.json
+├── README.md
+└── .structure
