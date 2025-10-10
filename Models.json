@@ -1,0 +1,30 @@
+[
+  {
+    "id": "grok-4",
+    "name": "Grok 4",
+    "value": "x-ai/grok-4-fast:free",
+    "icon": "GrokIcon",
+    "color": "#6366F1"
+  },
+  {
+    "id": "deephermes-3",
+    "name": "DeepHermes",
+    "value": "nousresearch/deephermes-3-llama-3-8b-preview:free",
+    "icon": "BrainIcon",
+    "color": "#8B5CF6"
+  },
+  {
+    "id": "nemotron",
+    "name": "Nemotron",
+    "value": "nvidia/nemotron-nano-9b-v2:free",
+    "icon": "LightningIcon",
+    "color": "#10B981"
+  },
+  {
+    "id": "deepcoder",
+    "name": "DeepCoder",
+    "value": "agentica-org/deepcoder-14b-preview:free",
+    "icon": "LightningIconpro",
+    "color": "#59ffec"
+  }
+]
