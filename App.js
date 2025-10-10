@@ -19,6 +19,7 @@ import {
   Modal,
   PanResponder,
   Keyboard,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +33,10 @@ const { width, height } = Dimensions.get('window');
 
 const API_KEY = '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';
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/yuvrajmodz/Raze/main/UpdateCheck.json';
+const MODELS_FETCH_URL = 'https://raw.githubusercontent.com/yuvrajmodz/Raze/main/Models.json';
+
+const CURRENT_APP_VERSION = '1.0.3';
 
 const GrokIcon = ({ size = 20, color = "#6366F1" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -101,36 +106,45 @@ const StopIcon = ({ size = 20, color = "#fff" }) => (
   </Svg>
 );
 
-const AI_MODELS = [
-  {
-    id: 'grok-4',
-    name: 'Grok 4',
-    value: 'x-ai/grok-4-fast:free',
-    icon: GrokIcon,
-    color: '#6366F1'
-  },
-  {
-    id: 'deephermes-3',
-    name: 'DeepHermes',
-    value: 'nousresearch/deephermes-3-llama-3-8b-preview:free',
-    icon: BrainIcon,
-    color: '#8B5CF6'
-  },
-  {
-    id: 'nemotron',
-    name: 'Nemotron',
-    value: 'nvidia/nemotron-nano-9b-v2:free',
-    icon: LightningIcon,
-    color: '#10B981'
-  },
-  {
-    id: 'deepcoder',
-    name: 'DeepCoder',
-    value: 'agentica-org/deepcoder-14b-preview:free',
-    icon: LightningIconpro,
-    color: '#59ffec'
+// Icon mapping for dynamic models
+const ICON_MAP = {
+  GrokIcon: GrokIcon,
+  BrainIcon: BrainIcon,
+  LightningIcon: LightningIcon,
+  LightningIconpro: LightningIconpro,
+};
+
+// Version comparison function
+const compareVersions = (currentVersion, latestVersion) => {
+  try {
+    console.log(`Comparing versions - Current: ${currentVersion}, Latest: ${latestVersion}`);
+    
+    const currentParts = currentVersion.split('.').map(part => parseInt(part) || 0);
+    const latestParts = latestVersion.split('.').map(part => parseInt(part) || 0);
+    
+    // Compare each part of the version
+    for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
+      const currentPart = currentParts[i] || 0;
+      const latestPart = latestParts[i] || 0;
+      
+      console.log(`Part ${i}: Current=${currentPart}, Latest=${latestPart}`);
+      
+      if (latestPart > currentPart) {
+        console.log('Update needed - latest version is newer');
+        return -1; // Update needed
+      } else if (latestPart < currentPart) {
+        console.log('No update needed - current version is newer');
+        return 1; // Current version is newer
+      }
+    }
+    
+    console.log('Versions are equal - no update needed');
+    return 0; // Versions are equal
+  } catch (error) {
+    console.error('Error comparing versions:', error);
+    return -1; // If error, assume update needed
   }
-];
+};
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -139,8 +153,10 @@ function App() {
   const [theme, setTheme] = useState('auto');
   const [showSettings, setShowSettings] = useState(false);
   const [copiedCodeId, setCopiedCodeId] = useState(null);
-  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0]);
+  const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [aiModels, setAiModels] = useState([]);
+  const [expandedThinkMessages, setExpandedThinkMessages] = useState({});
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [chatSessions, setChatSessions] = useState([]);
@@ -152,6 +168,11 @@ function App() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   
+  // Update state
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
   const flatListRef = useRef(null);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
   const dropdownAnimation = useRef(new Animated.Value(0)).current;
@@ -202,96 +223,231 @@ function App() {
     };
   }, []);
 
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: (evt, gestureState) => {
-      return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-    },
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
-      return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-    },
-    onPanResponderMove: (evt, gestureState) => {
-      if (gestureState.dx > 0 && gestureState.dx < width * 0.8) {
-        if (!showSidebar && gestureState.dx > 50) {
-          setShowSidebar(true);
-        }
-        if (showSidebar) {
-          sidebarAnimation.setValue(Math.max(-width * 0.8, -width * 0.8 + gestureState.dx));
-          overlayOpacity.setValue(Math.min(1, gestureState.dx / (width * 0.3)));
-        } else {
-          sidebarAnimation.setValue(-width * 0.8 + gestureState.dx);
-          overlayOpacity.setValue(Math.min(1, gestureState.dx / (width * 0.3)));
-        }
-      } else if (gestureState.dx < 0 && showSidebar) {
-        const newValue = Math.max(-width * 0.8, gestureState.dx);
-        sidebarAnimation.setValue(newValue);
-        overlayOpacity.setValue(Math.max(0, 1 + (gestureState.dx / (width * 0.3))));
-      }
-    },
-    onPanResponderRelease: (evt, gestureState) => {
-      if (gestureState.dx > width * 0.25 && !showSidebar) {
+const panResponder = PanResponder.create({
+  onStartShouldSetPanResponder: (evt, gestureState) => {
+    return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+  },
+  onMoveShouldSetPanResponder: (evt, gestureState) => {
+    return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+  },
+  onPanResponderMove: (evt, gestureState) => {
+    // YEH NAYI CONDITION ADD KARO
+    if (showSidebar && gestureState.dx > 0) {
+      return; // Sidebar open hai aur right swipe - koi action nahi
+    }
+    
+    if (gestureState.dx > 0 && gestureState.dx < width * 0.8) {
+      if (!showSidebar && gestureState.dx > 50) {
         setShowSidebar(true);
-        Animated.parallel([
-          Animated.spring(sidebarAnimation, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }),
-          Animated.timing(overlayOpacity, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ]).start();
-      } else if (gestureState.dx < -width * 0.2 && showSidebar) {
-        Animated.parallel([
-          Animated.spring(sidebarAnimation, {
-            toValue: -width * 0.8,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }),
-          Animated.timing(overlayOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ]).start(() => {
-          setShowSidebar(false);
-        });
-      } else if (showSidebar) {
-        Animated.parallel([
-          Animated.spring(sidebarAnimation, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }),
-          Animated.timing(overlayOpacity, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ]).start();
-      } else {
-        Animated.parallel([
-          Animated.spring(sidebarAnimation, {
-            toValue: -width * 0.8,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }),
-          Animated.timing(overlayOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ]).start(() => {
-          setShowSidebar(false);
-        });
       }
-    },
-  });
+      if (showSidebar) {
+        sidebarAnimation.setValue(Math.max(-width * 0.8, -width * 0.8 + gestureState.dx));
+        overlayOpacity.setValue(Math.min(1, gestureState.dx / (width * 0.3)));
+      } else {
+        sidebarAnimation.setValue(-width * 0.8 + gestureState.dx);
+        overlayOpacity.setValue(Math.min(1, gestureState.dx / (width * 0.3)));
+      }
+    } else if (gestureState.dx < 0 && showSidebar) {
+      const newValue = Math.max(-width * 0.8, gestureState.dx);
+      sidebarAnimation.setValue(newValue);
+      overlayOpacity.setValue(Math.max(0, 1 + (gestureState.dx / (width * 0.3))));
+    }
+  },
+  onPanResponderRelease: (evt, gestureState) => {
+    if (gestureState.dx > width * 0.25 && !showSidebar) {
+      setShowSidebar(true);
+      Animated.parallel([
+        Animated.spring(sidebarAnimation, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else if (gestureState.dx < -width * 0.2 && showSidebar) {
+      Animated.parallel([
+        Animated.spring(sidebarAnimation, {
+          toValue: -width * 0.8,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setShowSidebar(false);
+      });
+    } else if (showSidebar) {
+      Animated.parallel([
+        Animated.spring(sidebarAnimation, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(sidebarAnimation, {
+          toValue: -width * 0.8,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setShowSidebar(false);
+      });
+    }
+  },
+});
+
+  // Fetch models from API
+  const fetchModels = async () => {
+    try {
+      const response = await expoFetch(MODELS_FETCH_URL);
+      const data = await response.json();
+      
+      if (Array.isArray(data)) {
+        const processedModels = data.map(model => ({
+          ...model,
+          icon: ICON_MAP[model.icon] || GrokIcon // Fallback to GrokIcon if icon not found
+        }));
+        
+        setAiModels(processedModels);
+        if (processedModels.length > 0 && !selectedModel) {
+          setSelectedModel(processedModels[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching models:', error);
+      // Fallback to default models if API fails
+      const fallbackModels = [
+        {
+          id: 'grok-4',
+          name: 'Grok 4',
+          value: 'x-ai/grok-4-fast:free',
+          icon: GrokIcon,
+          color: '#6366F1'
+        },
+        {
+          id: 'deephermes-3',
+          name: 'DeepHermes',
+          value: 'nousresearch/deephermes-3-llama-3-8b-preview:free',
+          icon: BrainIcon,
+          color: '#8B5CF6'
+        }
+      ];
+      setAiModels(fallbackModels);
+      if (fallbackModels.length > 0 && !selectedModel) {
+        setSelectedModel(fallbackModels[0]);
+      }
+    }
+  };
+
+  // Check for updates with version comparison
+  const checkForUpdates = async () => {
+    try {
+      setIsCheckingUpdate(true);
+      console.log('Checking for updates...');
+      console.log('Current app version:', CURRENT_APP_VERSION);
+      
+      const response = await expoFetch(UPDATE_CHECK_URL);
+      const responseText = await response.text();
+      
+      console.log('Update check response:', responseText);
+      
+      if (responseText === "No Updates Available") {
+        console.log('No updates available');
+        return;
+      }
+      
+      // Try to parse as JSON for update info
+      try {
+        const updateData = JSON.parse(responseText);
+        
+        if (updateData.status === "availableUpdate" && updateData.version) {
+          console.log('Server version received:', updateData.version);
+          
+          // Compare versions
+          const versionComparison = compareVersions(CURRENT_APP_VERSION, updateData.version);
+          
+          if (versionComparison === -1) {
+            // Update needed - current version is older
+            console.log('UPDATE NEEDED: Showing update modal');
+            setUpdateInfo(updateData);
+            setShowUpdateModal(true);
+          } else if (versionComparison === 0) {
+            console.log('NO UPDATE: Versions match');
+          } else {
+            console.log('NO UPDATE: Current version is newer');
+          }
+        } else {
+          console.log('No valid update data in response');
+        }
+      } catch (parseError) {
+        console.error('Error parsing update response:', parseError);
+        // If JSON parsing fails but we have text response, try to extract version
+        if (responseText.includes('version')) {
+          try {
+            const versionMatch = responseText.match(/"version":\s*"([^"]+)"/);
+            if (versionMatch && versionMatch[1]) {
+              const serverVersion = versionMatch[1];
+              console.log('Extracted server version:', serverVersion);
+              
+              const versionComparison = compareVersions(CURRENT_APP_VERSION, serverVersion);
+              if (versionComparison === -1) {
+                console.log('UPDATE NEEDED: Showing update modal with extracted version');
+                setUpdateInfo({
+                  version: serverVersion,
+                  status: "availableUpdate",
+                  apkLink: responseText.match(/"apkLink":\s*"([^"]+)"/)?.[1] || ''
+                });
+                setShowUpdateModal(true);
+              }
+            }
+          } catch (extractError) {
+            console.error('Error extracting version:', extractError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleUpdate = () => {
+    if (updateInfo?.apkLink) {
+      Linking.openURL(updateInfo.apkLink).catch(err => {
+        Alert.alert('Error', 'Failed to open update link');
+        console.error('Error opening link:', err);
+      });
+    }
+  };
+
+  const handleLater = () => {
+    setShowUpdateModal(false);
+    setUpdateInfo(null);
+  };
 
   const themeColors = {
     dark: {
@@ -318,6 +474,8 @@ function App() {
       boldText: '#FFFFFF',
       newChatButtonBg: '#FFFFFF',
       newChatButtonText: '#000000',
+      thinkBubble: '#2A2A2A',
+      thinkText: '#888888',
     },
     light: {
       background: '#FFFFFF',
@@ -343,6 +501,8 @@ function App() {
       boldText: '#1F2937',
       newChatButtonBg: '#000000', 
       newChatButtonText: '#FFFFFF',
+      thinkBubble: '#E5E7EB',
+      thinkText: '#6B7280',
     }
   };
 
@@ -381,6 +541,8 @@ function App() {
   useEffect(() => {
     loadTheme();
     loadChatSessions();
+    fetchModels();
+    checkForUpdates();
   }, []);
 
   useEffect(() => {
@@ -445,7 +607,7 @@ function App() {
     setCurrentSessionId(session.id);
     setShowSidebar(false);
     
-    const sessionModel = AI_MODELS.find(model => model.id === session.model) || AI_MODELS[0];
+    const sessionModel = aiModels.find(model => model.id === session.model) || aiModels[0];
     setSelectedModel(sessionModel);
   };
 
@@ -457,6 +619,7 @@ function App() {
     setCurrentSessionId(null);
     setShowSidebar(false);
     setIsStreaming(false);
+    setExpandedThinkMessages({});
   };
 
   const loadTheme = async () => {
@@ -571,6 +734,33 @@ function App() {
     }
   };
 
+  // Function to extract think content from message
+  const extractThinkContent = (text) => {
+    const thinkRegex = /◁think▷(.*?)◁\/think▷/gs;
+    const matches = [];
+    let match;
+    
+    while ((match = thinkRegex.exec(text)) !== null) {
+      matches.push(match[1].trim());
+    }
+    
+    return matches;
+  };
+
+  // Function to remove think content from main message
+  const removeThinkContent = (text) => {
+    return text.replace(/◁think▷.*?◁\/think▷/gs, '').trim();
+  };
+
+  // Toggle think message expansion
+  const toggleThinkExpansion = (messageId, thinkIndex) => {
+    const key = `${messageId}-${thinkIndex}`;
+    setExpandedThinkMessages(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
   const parseMarkdown = (text) => {
     if (!text) return [{ type: 'text', content: '' }];
     const parts = [];
@@ -653,16 +843,59 @@ function App() {
     );
   };
 
+  const renderThinkContent = (messageId, thinkContent, thinkIndex) => {
+    const isExpanded = expandedThinkMessages[`${messageId}-${thinkIndex}`];
+    
+    return (
+      <View style={[styles.thinkContainer, { backgroundColor: colors.thinkBubble }]}>
+        <TouchableOpacity 
+          style={styles.thinkHeader}
+          onPress={() => toggleThinkExpansion(messageId, thinkIndex)}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name={isExpanded ? "chevron-down" : "chevron-forward"} 
+            size={16} 
+            color={colors.thinkText} 
+          />
+          <Text style={[styles.thinkHeaderText, { color: colors.thinkText }]}>
+           Thoughts...
+          </Text>
+        </TouchableOpacity>
+        
+        {isExpanded && (
+          <View style={styles.thinkContent}>
+            <Text style={[styles.thinkText, { color: colors.text }]}>
+              {thinkContent}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderMessageContent = (message) => {
     if (!message.isUser && message.isStreaming && (!message.text || message.text.length === 0)) {
       return <BlinkingDots />;
     }
 
-    const parts = parseCodeBlocks(message.text);
+    // Extract think content
+    const thinkContents = extractThinkContent(message.text);
+    const mainContent = removeThinkContent(message.text);
+    
+    const parts = parseCodeBlocks(mainContent);
     const codeId = `${message.id}-${Date.now()}`;
     
     return (
       <View>
+        {/* Render think contents first */}
+        {thinkContents.map((thinkContent, index) => (
+          <View key={`think-${index}`} style={styles.thinkWrapper}>
+            {renderThinkContent(message.id, thinkContent, index)}
+          </View>
+        ))}
+        
+        {/* Render main content */}
         {parts.map((part, index) => {
           if (part.type === 'code') {
             const isCopied = copiedCodeId === `${codeId}-${index}`;
@@ -728,7 +961,7 @@ function App() {
   };
 
   const sendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+    if (!inputText.trim() || isLoading || !selectedModel) return;
 
     const userMessage = {
       id: Date.now().toString(),
@@ -903,7 +1136,7 @@ function App() {
           styles.messageBubble,
           isUser ? styles.userBubble : styles.aiBubble
         ]}>
-          {!isUser && (
+          {!isUser && selectedModel && (
             <View style={styles.aiAvatarContainer}>
               <View style={[styles.aiAvatar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
                 {selectedModel.icon({ size: 18, color: selectedModel.color })}
@@ -995,6 +1228,56 @@ function App() {
     outputRange: ['0deg', '180deg'],
   });
 
+  const UpdateModal = () => (
+    <Modal
+      visible={showUpdateModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => updateInfo?.type === 'required' ? null : handleLater()}
+    >
+      <View style={styles.updateModalOverlay}>
+        <View style={[styles.updateModalContent, { backgroundColor: colors.surfaceElevated }]}>
+          <View style={[styles.updateHeader, { borderBottomColor: colors.border }]}>
+            <Ionicons name="cloud-download-outline" size={32} color={colors.userBubble} />
+            <Text style={[styles.updateTitle, { color: colors.text }]}>Update Available!</Text>
+          </View>
+          
+          <View style={styles.updateBody}>
+            <Text style={[styles.updateVersion, { color: colors.textSecondary }]}>
+              New Version: {updateInfo?.version}
+            </Text>
+            <Text style={[styles.updateCurrentVersion, { color: colors.textTertiary }]}>
+              Current Version: {CURRENT_APP_VERSION}
+            </Text>
+            <Text style={[styles.updateDescription, { color: colors.textTertiary }]}>
+              {updateInfo?.type === 'required' 
+                ? 'A new version is available. Please update to continue using the app.' 
+                : 'A new version is available with exciting new features and improvements.'}
+            </Text>
+          </View>
+          
+          <View style={styles.updateButtons}>
+            {updateInfo?.type === 'optional' && (
+              <TouchableOpacity 
+                style={[styles.updateButton, styles.laterButton, { borderColor: colors.border }]}
+                onPress={handleLater}
+              >
+                <Text style={[styles.laterButtonText, { color: colors.textSecondary }]}>Later</Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity 
+              style={[styles.updateButton, styles.updateActionButton, { backgroundColor: colors.userBubble }]}
+              onPress={handleUpdate}
+            >
+              <Text style={styles.updateButtonText}>Update Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
       <StatusBar 
@@ -1018,25 +1301,37 @@ function App() {
         </TouchableOpacity>
 
         <View style={styles.modelSelectorContainer}>
-          <TouchableOpacity 
-            style={[styles.modelSelector, { 
+          {selectedModel ? (
+            <TouchableOpacity 
+              style={[styles.modelSelector, { 
+                backgroundColor: colors.surfaceElevated, 
+                borderColor: colors.border,
+                shadowColor: colors.shadow,
+              }]}
+              onPress={toggleModelDropdown}
+              activeOpacity={0.8}
+            >
+              <View style={styles.modelIconContainer}>
+                {selectedModel.icon({ size: 20, color: selectedModel.color })}
+              </View>
+              <Text style={[styles.modelName, { color: colors.text }]}>{selectedModel.name}</Text>
+              <Animated.View style={{ transform: [{ rotate: rotateArrow }] }}>
+                <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+              </Animated.View>
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.modelSelector, { 
               backgroundColor: colors.surfaceElevated, 
               borderColor: colors.border,
-              shadowColor: colors.shadow,
-            }]}
-            onPress={toggleModelDropdown}
-            activeOpacity={0.8}
-          >
-            <View style={styles.modelIconContainer}>
-              {selectedModel.icon({ size: 20, color: selectedModel.color })}
+            }]}>
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+              <Text style={[styles.modelName, { color: colors.textSecondary, marginLeft: 10 }]}>
+                Loading...
+              </Text>
             </View>
-            <Text style={[styles.modelName, { color: colors.text }]}>{selectedModel.name}</Text>
-            <Animated.View style={{ transform: [{ rotate: rotateArrow }] }}>
-              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-            </Animated.View>
-          </TouchableOpacity>
+          )}
 
-          {showModelDropdown && (
+          {showModelDropdown && aiModels.length > 0 && (
             <Animated.View 
               style={[
                 styles.modelDropdown,
@@ -1062,13 +1357,13 @@ function App() {
                 }
               ]}
             >
-              {AI_MODELS.map((model, index) => (
+              {aiModels.map((model, index) => (
                 <TouchableOpacity
                   key={model.id}
                   style={[
                     styles.modelOption,
-                    index < AI_MODELS.length - 1 && { borderBottomColor: colors.dropdownBorder, borderBottomWidth: 0.5 },
-                    selectedModel.id === model.id && { backgroundColor: colors.userBubble + '10' }
+                    index < aiModels.length - 1 && { borderBottomColor: colors.dropdownBorder, borderBottomWidth: 0.5 },
+                    selectedModel?.id === model.id && { backgroundColor: colors.userBubble + '10' }
                   ]}
                   onPress={() => selectModel(model)}
                   activeOpacity={0.7}
@@ -1077,7 +1372,7 @@ function App() {
                     {model.icon({ size: 18, color: model.color })}
                   </View>
                   <Text style={[styles.modelOptionName, { color: colors.text }]}>{model.name}</Text>
-                  {selectedModel.id === model.id && (
+                  {selectedModel?.id === model.id && (
                     <View style={[styles.selectedIndicator, { backgroundColor: colors.userBubble }]}>
                       <Ionicons name="checkmark" size={14} color="#fff" />
                     </View>
@@ -1144,7 +1439,7 @@ function App() {
             multiline
             maxLength={2000}
             autoFocus={false}
-            editable={!isStreaming}
+            editable={!isStreaming && !!selectedModel}
           />
           <Animated.View style={{ transform: [{ scale: sendButtonScale }] }}>
             <TouchableOpacity
@@ -1323,6 +1618,8 @@ function App() {
           onPress={() => setShowModelDropdown(false)}
         />
       )}
+
+      <UpdateModal />
     </SafeAreaView>
   );
 }
@@ -1628,6 +1925,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginVertical: 8,
   },
+  // Think container styles
+  thinkWrapper: {
+    marginBottom: 8,
+  },
+  thinkContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  thinkHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  thinkHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+    letterSpacing: -0.1,
+  },
+  thinkContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  thinkText: {
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: -0.1,
+  },
   streamingCursor: {
     fontSize: 16,
     fontWeight: '300',
@@ -1799,6 +2129,95 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  // Update Modal Styles
+  updateModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  updateModalContent: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  updateHeader: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  updateTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 12,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  updateBody: {
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  updateVersion: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  updateCurrentVersion: {
+    fontSize: 14,
+    marginBottom: 12,
+    textAlign: 'center',
+    letterSpacing: -0.1,
+  },
+  updateDescription: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    letterSpacing: -0.1,
+  },
+  updateButtons: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 12,
+  },
+  updateButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  laterButton: {
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  laterButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  updateActionButton: {
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  updateButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',

@@ -7,6 +7,9 @@ Raze/
 ├── App.js
 ├── app.json
 ├── index.js
+├── LICENSE
+├── Models.json
 ├── package.json
 ├── README.md
+├── UpdateCheck.json
 └── .structure

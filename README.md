@@ -1,10 +1,10 @@
 # 𝗥𝗮𝘇𝗲 𝟰𝗼
 
 **Developer:** @Nactire  
-**Version:** 1.0.1  
+**Version:** 1.0.3  
 
 ## Overview
-a Advanced & Modern React Native app. It comes with:
+Advanced & Modern React Native app. It comes with:
 
 - **Multiple AI Models:** Chat with different AI personalities.
 - **Memory Saving System:** Optimized for low resource usage.
@@ -14,5 +14,5 @@ a Advanced & Modern React Native app. It comes with:
 ## 𝗣𝗿𝗼𝗷𝗲𝗰𝘁 𝗦𝘁𝗿𝘂𝗰𝘁𝘂𝗿𝗲
 [`.structure`](./.structure)
 
-## Rights.
+
 © 2025 NacDevs. All rights reserved. 
