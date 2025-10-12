@@ -1,16 +1,16 @@
 [
   {
-    "id": "deephermes-3",
-    "name": "DeepHermes",
-    "value": "nousresearch/deephermes-3-llama-3-8b-preview:free",
-    "icon": "BrainIcon",
-    "color": "#8B5CF6"
-  },
-  {
     "id": "qwenikkkk",
     "name": "Qwen 2.5",
     "value": "qwen/qwen2.5-vl-72b-instruct:free",
     "icon": "GrokIcon",
+    "color": "#8B5CF6"
+  },
+  {
+    "id": "deephermes-3",
+    "name": "DeepHermes",
+    "value": "nousresearch/deephermes-3-llama-3-8b-preview:free",
+    "icon": "BrainIcon",
     "color": "#8B5CF6"
   },
   {
