@@ -19,12 +19,5 @@
     "value": "nvidia/nemotron-nano-9b-v2:free",
     "icon": "LightningIcon",
     "color": "#10B981"
-  },
-  {
-    "id": "deepcoder",
-    "name": "DeepCoder",
-    "value": "agentica-org/deepcoder-14b-preview:free",
-    "icon": "LightningIconpro",
-    "color": "#59ffec"
   }
 ]
