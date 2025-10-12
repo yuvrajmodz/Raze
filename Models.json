@@ -7,6 +7,13 @@
     "color": "#8B5CF6"
   },
   {
+    "id": "qwendev",
+    "name": "Qwen Dev",
+    "value": "moonshotai/kimi-dev-72b:free",
+    "icon": "GrokIcon",
+    "color": "yellow"
+  }
+  {
     "id": "deephermes-3",
     "name": "DeepHermes",
     "value": "nousresearch/deephermes-3-llama-3-8b-preview:free",
