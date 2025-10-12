@@ -26,12 +26,5 @@
     "value": "agentica-org/deepcoder-14b-preview:free",
     "icon": "LightningIconpro",
     "color": "#59ffec"
-  },
-  {
-    "id": "kimik2",
-    "name": "Kimi K2",
-    "value": "moonshotai/kimi-k2:free",
-    "icon": "GrokIcon",
-    "color": "#6366F1"
   }
 ]
